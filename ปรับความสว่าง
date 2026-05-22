@@ -1,0 +1,383 @@
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+
+if CoreGui:FindFirstChild("WACKSHOP_LIGHTING") then
+    CoreGui.WACKSHOP_LIGHTING:Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "WACKSHOP_LIGHTING"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = CoreGui
+
+local themeColor = Color3.fromRGB(0, 170, 255)
+
+-- =========================
+-- LIGHTING
+-- =========================
+local settings = {
+    Brightness = 2,
+    ClockTime = 13.5,
+    Ambient = 140,
+    ExposureCompensation = 0,
+}
+
+local lockClock = true
+
+local function applyLighting()
+    Lighting.FogStart = 100000
+    Lighting.FogEnd = 100000
+    Lighting.FogColor = Color3.fromRGB(200, 200, 200)
+    Lighting.Brightness = settings.Brightness
+    Lighting.ClockTime = settings.ClockTime
+    Lighting.GlobalShadows = true
+    Lighting.OutdoorAmbient = Color3.fromRGB(170, 170, 170)
+    Lighting.Ambient = Color3.fromRGB(settings.Ambient, settings.Ambient, settings.Ambient)
+    Lighting.ExposureCompensation = settings.ExposureCompensation
+end
+
+applyLighting()
+
+-- แก้กระตุก: ใช้ task.defer แทน connect ตรงๆ
+Lighting:GetPropertyChangedSignal("ClockTime"):Connect(function()
+    if lockClock then
+        task.defer(function()
+            Lighting.ClockTime = settings.ClockTime
+        end)
+    end
+end)
+
+-- =========================
+-- DRAG FUNCTION
+-- =========================
+local function makeDraggable(frame, bar)
+    local dragging, dragStart, startPos
+    bar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (
+            input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch
+        ) then
+            local d = input.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + d.X,
+                startPos.Y.Scale, startPos.Y.Offset + d.Y
+            )
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+-- =========================
+-- WARNING POPUP
+-- =========================
+local blur = Instance.new("BlurEffect")
+blur.Size = 8
+blur.Parent = Lighting
+
+local warnFrame = Instance.new("Frame")
+warnFrame.Size = UDim2.fromOffset(260, 140)
+warnFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+warnFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+warnFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 20)
+warnFrame.BorderSizePixel = 0
+warnFrame.ZIndex = 50
+warnFrame.Parent = screenGui
+Instance.new("UICorner", warnFrame).CornerRadius = UDim.new(0, 12)
+
+local warnStroke = Instance.new("UIStroke")
+warnStroke.Color = Color3.fromRGB(220, 30, 30)
+warnStroke.Thickness = 1.5
+warnStroke.Parent = warnFrame
+
+local warnIcon = Instance.new("TextLabel")
+warnIcon.Size = UDim2.new(1, 0, 0, 28)
+warnIcon.Position = UDim2.new(0, 0, 0, 10)
+warnIcon.BackgroundTransparency = 1
+warnIcon.Text = "⚠️ คำเตือน"
+warnIcon.TextColor3 = Color3.fromRGB(220, 30, 30)
+warnIcon.Font = Enum.Font.GothamBold
+warnIcon.TextSize = 15
+warnIcon.ZIndex = 51
+warnIcon.Parent = warnFrame
+
+local warnText = Instance.new("TextLabel")
+warnText.Size = UDim2.new(1, -20, 0, 50)
+warnText.Position = UDim2.new(0, 10, 0, 42)
+warnText.BackgroundTransparency = 1
+warnText.Text = "ระวังสายตา! สคริปนี้ปรับแสงได้\nควรเปิดในที่ที่มีแสงเพียงพอ"
+warnText.TextColor3 = Color3.fromRGB(200, 200, 220)
+warnText.Font = Enum.Font.Gotham
+warnText.TextSize = 12
+warnText.TextWrapped = true
+warnText.ZIndex = 51
+warnText.Parent = warnFrame
+
+local warnBtn = Instance.new("TextButton")
+warnBtn.Size = UDim2.new(1, -20, 0, 28)
+warnBtn.Position = UDim2.new(0, 10, 0, 100)
+warnBtn.BackgroundColor3 = Color3.fromRGB(220, 30, 30)
+warnBtn.Text = "รับทราบ"
+warnBtn.TextColor3 = Color3.new(1, 1, 1)
+warnBtn.Font = Enum.Font.GothamBold
+warnBtn.TextSize = 13
+warnBtn.BorderSizePixel = 0
+warnBtn.ZIndex = 52
+warnBtn.Parent = warnFrame
+Instance.new("UICorner", warnBtn).CornerRadius = UDim.new(0, 8)
+
+warnBtn.MouseButton1Click:Connect(function()
+    TweenService:Create(warnFrame, TweenInfo.new(0.25), {
+        BackgroundTransparency = 1
+    }):Play()
+    TweenService:Create(blur, TweenInfo.new(0.25), { Size = 0 }):Play()
+    task.delay(0.3, function()
+        warnFrame:Destroy()
+        blur:Destroy()
+    end)
+end)
+
+-- =========================
+-- MAIN FRAME
+-- =========================
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.fromOffset(210, 370)
+mainFrame.AnchorPoint = Vector2.new(1, 0.5)
+mainFrame.Position = UDim2.new(1, -20, 0.5, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 15)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = themeColor
+stroke.Thickness = 1.5
+stroke.Parent = mainFrame
+
+local BG = Instance.new("UIGradient")
+BG.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(14, 14, 22)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 8, 14))
+})
+BG.Rotation = 135
+BG.Parent = mainFrame
+
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 38)
+titleBar.BackgroundColor3 = Color3.fromRGB(12, 12, 20)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 12)
+
+local topLine = Instance.new("Frame")
+topLine.Size = UDim2.new(1, 0, 0, 1)
+topLine.Position = UDim2.new(0, 0, 1, -1)
+topLine.BackgroundColor3 = themeColor
+topLine.BackgroundTransparency = 0.5
+topLine.BorderSizePixel = 0
+topLine.Parent = titleBar
+
+local titleLbl = Instance.new("TextLabel")
+titleLbl.Size = UDim2.new(1, -40, 1, 0)
+titleLbl.Position = UDim2.new(0, 10, 0, 0)
+titleLbl.BackgroundTransparency = 1
+titleLbl.Text = "⚡ WackShop Lighting"
+titleLbl.TextColor3 = themeColor
+titleLbl.Font = Enum.Font.GothamBold
+titleLbl.TextSize = 13
+titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+titleLbl.Parent = titleBar
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.fromOffset(26, 26)
+closeBtn.AnchorPoint = Vector2.new(1, 0.5)
+closeBtn.Position = UDim2.new(1, -6, 0.5, 0)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 13
+closeBtn.AutoButtonColor = false
+closeBtn.BorderSizePixel = 0
+closeBtn.ZIndex = 11
+closeBtn.Parent = titleBar
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+makeDraggable(mainFrame, titleBar)
+
+-- =========================
+-- SLIDER BUILDER
+-- =========================
+local function createSlider(labelText, descText, yPos, minVal, maxVal, defaultVal, decimals, onChange)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, -16, 0, 64)
+    container.Position = UDim2.new(0, 8, 0, yPos)
+    container.BackgroundColor3 = Color3.fromRGB(16, 16, 26)
+    container.BorderSizePixel = 0
+    container.Parent = mainFrame
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
+    local cs = Instance.new("UIStroke")
+    cs.Color = Color3.fromRGB(40, 40, 60)
+    cs.Thickness = 1
+    cs.Parent = container
+
+    -- ชื่อ + ค่า
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -10, 0, 18)
+    label.Position = UDim2.new(0, 8, 0, 4)
+    label.BackgroundTransparency = 1
+    label.Text = labelText .. ": " .. defaultVal
+    label.TextColor3 = Color3.fromRGB(200, 200, 220)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    -- คำอธิบายภาษาไทย
+    local desc = Instance.new("TextLabel")
+    desc.Size = UDim2.new(1, -10, 0, 14)
+    desc.Position = UDim2.new(0, 8, 0, 22)
+    desc.BackgroundTransparency = 1
+    desc.Text = descText
+    desc.TextColor3 = Color3.fromRGB(80, 100, 130)
+    desc.Font = Enum.Font.Gotham
+    desc.TextSize = 10
+    desc.TextXAlignment = Enum.TextXAlignment.Left
+    desc.Parent = container
+
+    local track = Instance.new("Frame")
+    track.Size = UDim2.new(1, -16, 0, 6)
+    track.Position = UDim2.new(0, 8, 0, 46)
+    track.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+    track.BorderSizePixel = 0
+    track.Parent = container
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
+    fill.BackgroundColor3 = themeColor
+    fill.BorderSizePixel = 0
+    fill.Parent = track
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+    local knob = Instance.new("TextButton")
+    knob.Size = UDim2.fromOffset(16, 16)
+    knob.Position = UDim2.new((defaultVal - minVal) / (maxVal - minVal), -8, 0.5, -8)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.Text = ""
+    knob.BorderSizePixel = 0
+    knob.ZIndex = 5
+    knob.Parent = track
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+    local dragging = false
+    knob.MouseButton1Down:Connect(function() dragging = true end)
+    knob.TouchLongPress:Connect(function() dragging = true end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (
+            input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch
+        ) then
+            local ratio = math.clamp(
+                (input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X,
+                0, 1
+            )
+            local raw = minVal + ratio * (maxVal - minVal)
+            local value = decimals
+                and (math.floor(raw * 10 + 0.5) / 10)
+                or  math.floor(raw + 0.5)
+            fill.Size = UDim2.new(ratio, 0, 1, 0)
+            knob.Position = UDim2.new(ratio, -8, 0.5, -8)
+            label.Text = labelText .. ": " .. value
+            onChange(value)
+        end
+    end)
+end
+
+-- =========================
+-- SLIDERS + คำอธิบายไทย
+-- =========================
+createSlider("☀ Brightness", "ปรับความสว่างของแสงในเกม", 46, 0, 10, settings.Brightness, false, function(val)
+    settings.Brightness = val
+    Lighting.Brightness = val
+end)
+
+createSlider("🕐 Clock Time", "ปรับเวลาในเกม (0=เที่ยงคืน, 12=เที่ยงวัน)", 118, 0, 24, settings.ClockTime, true, function(val)
+    settings.ClockTime = val
+    lockClock = false
+    Lighting.ClockTime = val
+    task.defer(function() lockClock = true end)
+end)
+
+createSlider("🌫 Ambient", "ปรับแสงสะท้อนในที่มืด", 190, 0, 255, settings.Ambient, false, function(val)
+    settings.Ambient = val
+    Lighting.Ambient = Color3.fromRGB(val, val, val)
+end)
+
+createSlider("📷 Exposure", "ปรับความสว่างรวมของกล้อง", 262, -2, 2, settings.ExposureCompensation, true, function(val)
+    settings.ExposureCompensation = val
+    Lighting.ExposureCompensation = val
+end)
+
+-- =========================
+-- ปุ่ม W
+-- =========================
+local floatBtn = Instance.new("TextButton")
+floatBtn.Size = UDim2.fromOffset(44, 44)
+floatBtn.AnchorPoint = Vector2.new(0, 0.5)
+floatBtn.Position = UDim2.new(0, 20, 0.5, 0)
+floatBtn.BackgroundColor3 = Color3.fromRGB(12, 12, 20)
+floatBtn.Text = "W"
+floatBtn.TextColor3 = themeColor
+floatBtn.TextSize = 18
+floatBtn.Font = Enum.Font.GothamBold
+floatBtn.BorderSizePixel = 0
+floatBtn.ZIndex = 20
+floatBtn.Parent = screenGui
+Instance.new("UICorner", floatBtn).CornerRadius = UDim.new(1, 0)
+
+local fStroke = Instance.new("UIStroke")
+fStroke.Color = themeColor
+fStroke.Thickness = 1.5
+fStroke.Parent = floatBtn
+
+makeDraggable(floatBtn, floatBtn)
+
+local mainVisible = true
+floatBtn.MouseButton1Click:Connect(function()
+    mainVisible = not mainVisible
+    mainFrame.Visible = mainVisible
+    TweenService:Create(fStroke, TweenInfo.new(0.2), {
+        Color = mainVisible and themeColor or Color3.fromRGB(100, 100, 130)
+    }):Play()
+end)
+
+print("✅ WackShop Lighting Loaded!")
